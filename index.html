@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protocolo Holodeck - Navegação Espacial</title>
+  
+  <!-- Dependências KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            scifi: { blue: '#0096ff', dark: '#141923', panel: '#1e2532', green: '#39ff14', red: '#dc143c', orange: '#ff8c00' }
+          },
+          fontFamily: { mono: ['Courier New', 'monospace'], sans: ['Inter', 'sans-serif'] },
+          boxShadow: {
+            'neon-blue': '0 0 10px #0096ff, inset 0 0 10px #0096ff',
+            'neon-orange': '0 0 10px #ff8c00, inset 0 0 10px #ff8c00',
+            'neon-green': '0 0 10px #39ff14, inset 0 0 10px #39ff14',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    body { background-color: #0b0f19; color: #e2e8f0; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+    .scanlines { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1)); background-size: 100% 4px; pointer-events: none; z-index: 50; opacity: 0.3; }
+    
+    .hologram-border { border: 1px solid #0096ff; box-shadow: 0 0 10px rgba(0,150,255,0.2), inset 0 0 20px rgba(0,150,255,0.05); }
+    .alert-border { border: 1px solid #dc143c; box-shadow: 0 0 15px rgba(220,20,60,0.4), inset 0 0 20px rgba(220,20,60,0.1); }
+    
+    @keyframes flashWarning { 0%, 100% { background-color: rgba(220,20,60,0.1); border-color: #dc143c; } 50% { background-color: rgba(255,215,0,0.2); border-color: #ffd700; } }
+    .critical-flash { animation: flashWarning 1s infinite; }
+    @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    .shake-anim { animation: shake 0.3s ease-in-out; }
+    @keyframes pop { 0% { transform: scale(0.9); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    .pop-anim { animation: pop 0.3s ease-out; }
+
+    .glow-text { text-shadow: 0 0 8px currentColor; }
+    .katex { font-size: 1.1em !important; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col relative">
+  <div class="scanlines"></div>
+
+  <!-- HEADER -->
+  <header class="bg-scifi-dark border-b border-scifi-blue/30 p-4 sticky top-0 z-40 shadow-[0_0_15px_rgba(0,150,255,0.2)]">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-3 text-scifi-blue glow-text text-xl font-bold font-mono uppercase tracking-widest">
+        <i class="fa-solid fa-satellite"></i> Diretriz Central
+      </div>
+      <div class="flex gap-4 items-center">
+        <span id="round-display" class="hidden text-sm font-bold text-scifi-green bg-scifi-green/10 px-3 py-1 rounded border border-scifi-green/30">Rodada: 1</span>
+        <button onclick="openManual()" class="bg-scifi-panel hover:bg-scifi-blue/20 text-scifi-blue border border-scifi-blue px-4 py-2 rounded font-mono text-sm transition">
+          <i class="fa-solid fa-book-journal-whills mr-1"></i> Manual
+        </button>
+        <button onclick="resetGame()" class="text-scifi-red hover:text-red-400 text-sm font-mono"><i class="fa-solid fa-power-off"></i> Reset</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col">
+    
+    <!-- TELA 1: CONFIGURAÇÃO DE FROTA -->
+    <div id="screen-setup" class="flex flex-col items-center justify-center flex-1 py-8">
+      <h1 class="text-3xl font-mono text-scifi-blue mb-2 glow-text uppercase"><i class="fa-solid fa-users-viewfinder"></i> Registro de Frota</h1>
+      <p class="text-slate-400 mb-8 text-sm">Configure os 6 esquadrões que participarão do Holodeck.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full" id="setup-squads"></div>
+      <button onclick="startGame()" class="mt-8 bg-scifi-blue/20 hover:bg-scifi-blue text-scifi-blue hover:text-white border-2 border-scifi-blue px-8 py-3 rounded uppercase tracking-widest font-bold font-mono transition-all transform hover:scale-105 shadow-[0_0_15px_rgba(0,150,255,0.4)]">
+        Iniciar Simulação
+      </button>
+    </div>
+
+    <!-- TELA 2: LOBBY E MATCHMAKING -->
+    <div id="screen-lobby" class="hidden flex-col flex-1 py-4">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+        <!-- Leaderboard (Placar Geral) -->
+        <div class="lg:col-span-1 bg-scifi-panel hologram-border rounded-lg p-5 flex flex-col">
+          <h2 class="text-lg font-mono text-scifi-blue border-b border-scifi-blue/30 pb-2 mb-4 uppercase"><i class="fa-solid fa-ranking-star"></i> Ranking Geral</h2>
+          <div id="leaderboard-list" class="flex flex-col gap-3 overflow-y-auto"></div>
+        </div>
+        
+        <!-- Painel Central de Sorteio -->
+        <div class="lg:col-span-2 bg-scifi-dark border border-slate-700 rounded-lg p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
+          <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-scifi-blue/5 to-transparent pointer-events-none"></div>
+          <h2 class="text-2xl md:text-4xl font-mono text-slate-300 mb-6 tracking-widest">SISTEMA DE PAREAMENTO</h2>
+          
+          <div id="duel-announcement" class="hidden w-full mb-8">
+            <h3 class="text-scifi-green font-mono uppercase mb-6 border-b border-scifi-green/30 pb-2 inline-block"><i class="fa-solid fa-lock"></i> Duelo Travado - Turno 1</h3>
+            <div class="flex items-center justify-center gap-4 md:gap-8">
+              <div class="flex flex-col items-center w-1/3">
+                <span class="text-xs text-scifi-red font-bold uppercase mb-2">Desafiado (Joga Agora)</span>
+                <div id="vs-team-a" class="text-2xl md:text-3xl text-scifi-blue glow-text"></div>
+              </div>
+              <div class="text-3xl md:text-5xl font-black text-slate-600 italic">VS</div>
+              <div class="flex flex-col items-center w-1/3 opacity-50">
+                <span class="text-xs text-slate-400 uppercase mb-2">Aguardando (Turno 2)</span>
+                <div id="vs-team-b" class="text-xl md:text-2xl text-slate-400"></div>
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-draw" onclick="drawDuel()" class="bg-scifi-green/20 hover:bg-scifi-green text-scifi-green hover:text-black border-2 border-scifi-green px-6 py-3 rounded font-mono font-bold uppercase tracking-wider transition-colors shadow-[0_0_15px_rgba(57,255,20,0.3)]">
+            <i class="fa-solid fa-shuffle"></i> Sortear Próximo Duelo
+          </button>
+          <button id="btn-start-duel" onclick="startDuelPhase()" class="hidden bg-scifi-red/20 hover:bg-scifi-red text-scifi-red hover:text-white border-2 border-scifi-red px-8 py-4 rounded font-mono font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(220,20,60,0.3)] mt-4 animate-pulse">
+            Engajar Terminal <i class="fa-solid fa-forward-step ml-2"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TELA 3: ARENA DE DUELO -->
+    <div id="screen-duel" class="hidden flex-col flex-1 py-4">
+      <div class="flex justify-between items-center bg-scifi-panel border-l-4 border-scifi-blue rounded p-4 mb-4 shadow-lg">
+        <div class="flex items-center gap-3">
+          <div id="active-team-icon" class="text-3xl text-scifi-blue">🚀</div>
+          <div>
+            <span id="active-turn-display" class="text-xs text-scifi-green font-mono uppercase tracking-widest block font-bold">Turno 1 / 2</span>
+            <h2 id="active-team-name" class="text-xl font-bold text-white">Esquadrão Alpha</h2>
+          </div>
+        </div>
+        <div class="text-right flex items-center gap-6">
+          <div class="text-sm"><span class="text-slate-400 block text-[10px] uppercase">Pontos Restantes</span><strong id="active-team-pts" class="text-yellow-400 text-2xl drop-shadow-md">100</strong></div>
+          <div class="text-sm"><span class="text-slate-400 block text-[10px] uppercase">XP Base</span><strong id="round-xp-base" class="text-scifi-green text-2xl drop-shadow-md">1000</strong></div>
+        </div>
+      </div>
+
+      <!-- TIMER BAR -->
+      <div id="timer-container" class="w-full bg-slate-800 h-6 rounded mb-4 border border-slate-600 relative overflow-hidden shadow-inner">
+        <div id="timer-bar" class="h-full bg-scifi-green transition-all duration-1000 ease-linear" style="width: 100%;"></div>
+        <div id="timer-text" class="absolute inset-0 flex items-center justify-center text-xs font-bold font-mono text-white drop-shadow-md">05:00</div>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 flex-1">
+        <!-- ESQUERDA: Holo-Projetor -->
+        <div class="bg-scifi-panel hologram-border rounded-lg p-5 flex flex-col justify-between">
+          <h3 class="text-scifi-blue font-mono uppercase tracking-widest text-xs mb-2 border-b border-scifi-blue/30 pb-2 flex justify-between">
+            <span><i class="fa-solid fa-draw-polygon"></i> Holo-Projetor de Sincronização</span>
+            <span class="text-[10px] text-slate-400 lowercase">Visualização Opcional</span>
+          </h3>
+          
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-8 py-4 w-full">
+            <div class="flex flex-col items-center gap-6">
+              <!-- Triângulo -->
+              <div class="relative w-40 h-40">
+                <svg viewBox="0 0 100 100" class="w-full h-full overflow-visible">
+                  <line id="line-c" x1="10" y1="90" x2="90" y2="90" class="stroke-slate-600 stroke-[3px] transition-all duration-300" />
+                  <line id="line-a" x1="90" y1="90" x2="50" y2="10" class="stroke-slate-600 stroke-[3px] transition-all duration-300" />
+                  <line id="line-b" x1="50" y1="10" x2="10" y2="90" class="stroke-slate-600 stroke-[3px] transition-all duration-300" />
+                </svg>
+                <button id="trig-C" onclick="clickTrig('C', 'angle')" class="absolute top-[-15px] left-[50%] transform -translate-x-1/2 w-8 h-8 rounded-full bg-scifi-dark border-2 border-slate-600 text-xs font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center">C</button>
+                <button id="trig-A" onclick="clickTrig('A', 'angle')" class="absolute bottom-[-15px] left-[-10px] w-8 h-8 rounded-full bg-scifi-dark border-2 border-slate-600 text-xs font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center">A</button>
+                <button id="trig-B" onclick="clickTrig('B', 'angle')" class="absolute bottom-[-15px] right-[-10px] w-8 h-8 rounded-full bg-scifi-dark border-2 border-slate-600 text-xs font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center">B</button>
+                <button id="trig-c" onclick="clickTrig('c', 'side')" class="absolute bottom-1 left-[50%] transform -translate-x-1/2 w-6 h-6 rounded bg-scifi-dark border border-slate-600 text-[10px] font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center">c</button>
+                <button id="trig-a" onclick="clickTrig('a', 'side')" class="absolute top-[45%] right-[2%] w-6 h-6 rounded bg-scifi-dark border border-slate-600 text-[10px] font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center">a</button>
+                <button id="trig-b" onclick="clickTrig('b', 'side')" class="absolute top-[45%] left-[2%] w-6 h-6 rounded bg-scifi-dark border border-slate-600 text-[10px] font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center">b</button>
+              </div>
+
+              <!-- Checklist -->
+              <div class="flex flex-col gap-2 w-full min-w-[200px]">
+                <div id="check-A" class="flex items-center justify-between text-[10px] font-mono text-slate-500 border border-slate-700 bg-scifi-dark px-3 py-2 rounded transition-all"><span><i class="fa-regular fa-square mr-1"></i> Alfa (A ↔ a)</span><span class="text-yellow-500 font-bold">+10 PTS</span></div>
+                <div id="check-B" class="flex items-center justify-between text-[10px] font-mono text-slate-500 border border-slate-700 bg-scifi-dark px-3 py-2 rounded transition-all"><span><i class="fa-regular fa-square mr-1"></i> Beta (B ↔ b)</span><span class="text-yellow-500 font-bold">+10 PTS</span></div>
+                <div id="check-C" class="flex items-center justify-between text-[10px] font-mono text-slate-500 border border-slate-700 bg-scifi-dark px-3 py-2 rounded transition-all"><span><i class="fa-regular fa-square mr-1"></i> Gama (C ↔ c)</span><span class="text-yellow-500 font-bold">+10 PTS</span></div>
+              </div>
+            </div>
+
+            <div class="flex flex-col items-center bg-scifi-dark p-4 rounded-xl border border-slate-700 w-full sm:w-auto">
+              <!-- Equação -->
+              <div class="flex items-center gap-3 text-lg font-mono mb-4">
+                <div id="frac-A" class="flex flex-col items-center transition-opacity duration-500">
+                  <button id="slot-a" onclick="placeInEq('a', 'A')" class="w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render">a</button>
+                  <div class="w-full h-[2px] bg-slate-500 my-1 rounded"></div>
+                  <div class="flex items-center gap-1"><span class="text-[10px] text-slate-400">sin</span><button id="slot-A" onclick="placeInEq('A', 'A')" class="w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render">A</button></div>
+                </div>
+                <span class="text-slate-500">=</span>
+                <div id="frac-B" class="flex flex-col items-center transition-opacity duration-500">
+                  <button id="slot-b" onclick="placeInEq('b', 'B')" class="w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render">b</button>
+                  <div class="w-full h-[2px] bg-slate-500 my-1 rounded"></div>
+                  <div class="flex items-center gap-1"><span class="text-[10px] text-slate-400">sin</span><button id="slot-B" onclick="placeInEq('B', 'B')" class="w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render">B</button></div>
+                </div>
+                <span class="text-slate-500">=</span>
+                <div id="frac-C" class="flex flex-col items-center transition-opacity duration-500">
+                  <button id="slot-c" onclick="placeInEq('c', 'C')" class="w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render">c</button>
+                  <div class="w-full h-[2px] bg-slate-500 my-1 rounded"></div>
+                  <div class="flex items-center gap-1"><span class="text-[10px] text-slate-400">sin</span><button id="slot-C" onclick="placeInEq('C', 'C')" class="w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render">C</button></div>
+                </div>
+              </div>
+
+              <!-- Chips -->
+              <div class="pt-3 border-t border-slate-700 w-full flex justify-center gap-2 flex-wrap" id="data-chips-container"></div>
+              <p class="text-[9px] text-slate-500 mt-3 text-center">* Associe os pares no triângulo e deposite os chips na fórmula.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- DIREITA: Ação -->
+        <div class="flex flex-col gap-4">
+          <div class="bg-scifi-dark alert-border rounded-lg p-5">
+            <h3 class="text-scifi-red font-mono uppercase tracking-widest text-xs mb-3 border-b border-scifi-red/30 pb-2"><i class="fa-solid fa-triangle-exclamation"></i> Anomalia Detectada</h3>
+            <div id="problem-text" class="text-sm md:text-base leading-relaxed text-slate-200 math-render mb-4"></div>
+            
+            <div class="flex flex-col gap-3">
+              <div class="bg-black/50 p-3 rounded border border-slate-700 flex flex-col md:flex-row items-center gap-3">
+                <label class="text-xs font-mono text-scifi-blue whitespace-nowrap">Vetor (x) =</label>
+                <input type="text" id="answer-input" placeholder="Ex: 10raiz3" class="flex-1 bg-scifi-dark border border-scifi-blue/50 text-white font-mono px-3 py-2 rounded text-sm focus:outline-none focus:border-scifi-blue focus:ring-1 focus:ring-scifi-blue">
+                <button onclick="submitAnswer()" class="w-full md:w-auto bg-scifi-blue text-black font-bold uppercase text-sm tracking-wider px-6 py-2 rounded hover:bg-blue-400 transition shadow-[0_0_10px_rgba(0,150,255,0.4)]">Transmitir</button>
+              </div>
+              <button onclick="surrenderTurn()" class="w-full bg-scifi-red/10 hover:bg-scifi-red text-scifi-red hover:text-white border border-scifi-red/50 py-2 rounded font-mono text-xs uppercase tracking-widest transition">
+                <i class="fa-solid fa-skull"></i> Abortar Missão (Desistir)
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-scifi-panel border border-slate-700 rounded-lg p-5 flex flex-col flex-1">
+            <h3 class="text-scifi-blue font-mono uppercase tracking-widest text-xs mb-3 border-b border-scifi-blue/30 pb-2"><i class="fa-solid fa-microchip"></i> Assistência Computacional</h3>
+            <div id="hints-locked-msg" class="text-[10px] text-slate-400 italic mb-2">* O núcleo de dicas será desbloqueado caso o tempo principal (5 min) se esgote. Custa Pontos.</div>
+            <div id="hints-container" class="hidden flex-col gap-2">
+              <button id="btn-hint-1" onclick="buyHint(1)" class="w-full text-left bg-slate-800 border border-slate-600 p-2 rounded text-xs transition font-mono hover:bg-slate-700"><span class="text-yellow-400 font-bold">-10 PTS:</span> Descriptografar Montagem</button>
+              <div id="hint-1-content" class="hidden p-2 bg-black/40 border border-scifi-blue/30 rounded text-xs math-render text-slate-300"></div>
+              <button id="btn-hint-2" onclick="buyHint(2)" class="w-full text-left bg-slate-800 border border-slate-600 p-2 rounded text-xs transition font-mono opacity-50 pointer-events-none hover:bg-slate-700"><span class="text-yellow-400 font-bold">-10 PTS:</span> Traduzir Senos Notáveis</button>
+              <div id="hint-2-content" class="hidden p-2 bg-black/40 border border-scifi-blue/30 rounded text-xs math-render text-slate-300"></div>
+              <button id="btn-hint-3" onclick="buyHint(3)" class="w-full text-left bg-slate-800 border border-slate-600 p-2 rounded text-xs transition font-mono opacity-50 pointer-events-none hover:bg-slate-700"><span class="text-yellow-400 font-bold">-10 PTS:</span> Processamento Cruzado</button>
+              <div id="hint-3-content" class="hidden p-2 bg-black/40 border border-scifi-blue/30 rounded text-xs math-render text-slate-300"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL DE RESULTADO DO DUELO -->
+  <div id="modal-duel-result" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 hidden items-center justify-center p-4">
+    <div class="bg-scifi-dark border-2 border-slate-600 rounded-xl w-full max-w-lg flex flex-col p-8 text-center shadow-2xl relative overflow-hidden">
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-white/5 to-transparent pointer-events-none"></div>
+      
+      <h2 class="text-3xl font-black font-mono text-white mb-2 uppercase tracking-widest border-b border-slate-700 pb-4">Fim do Confronto</h2>
+      
+      <div id="duel-result-message" class="text-xl font-bold my-6 uppercase drop-shadow-md">
+        <!-- Renderizado JS (Ex: Vitória de Alpha) -->
+      </div>
+
+      <div class="flex justify-between items-center mb-8 bg-black/50 p-4 rounded-lg border border-slate-700">
+        <div class="flex flex-col items-center w-5/12">
+          <i id="dr-icon-a" class="fa-solid fa-rocket text-4xl mb-2"></i>
+          <span id="dr-name-a" class="font-bold text-sm mb-1">Equipe A</span>
+          <span id="dr-xp-a" class="text-scifi-green font-mono text-lg font-bold">0 XP</span>
+          <span id="dr-pts-a" class="text-yellow-500 text-[10px]">0 PTS Totais</span>
+        </div>
+        <div class="text-2xl font-black text-slate-600 w-2/12">VS</div>
+        <div class="flex flex-col items-center w-5/12">
+          <i id="dr-icon-b" class="fa-solid fa-globe text-4xl mb-2"></i>
+          <span id="dr-name-b" class="font-bold text-sm mb-1">Equipe B</span>
+          <span id="dr-xp-b" class="text-scifi-green font-mono text-lg font-bold">0 XP</span>
+          <span id="dr-pts-b" class="text-yellow-500 text-[10px]">0 PTS Totais</span>
+        </div>
+      </div>
+
+      <button onclick="closeDuelResult()" class="w-full bg-scifi-panel hover:bg-slate-700 text-white border border-slate-500 py-3 rounded font-mono uppercase tracking-widest font-bold transition">
+        Retornar ao Lobby Principal <i class="fa-solid fa-right-from-bracket ml-2"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL MANUAL -->
+  <div id="modal-manual" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-scifi-panel border-2 border-scifi-blue rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-[0_0_30px_rgba(0,150,255,0.3)]">
+      <div class="flex justify-between items-center p-4 border-b border-scifi-blue/30 bg-black/30">
+        <h2 class="font-mono font-bold text-scifi-blue uppercase tracking-widest"><i class="fa-solid fa-tablet-alt"></i> Manual da Frota</h2>
+        <button onclick="closeManual()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <div class="p-6 overflow-y-auto font-sans text-sm text-slate-200 math-render space-y-6">
+        <div class="bg-scifi-dark p-4 rounded border border-scifi-blue/50">
+          <h3 class="font-bold text-scifi-blue mb-2 uppercase text-xs">O Algoritmo: Lei dos Senos</h3>
+          <p class="mb-3">A medida de um vetor é sempre proporcional ao seno do ângulo que está na mira de seus sensores.</p>
+          <div class="text-center bg-black/50 py-3 rounded text-lg">$\frac{a}{\sin(\widehat{A})} = \frac{b}{\sin(\widehat{B})} = \frac{c}{\sin(\widehat{C})}$</div>
+        </div>
+        <div class="bg-scifi-dark p-4 rounded border border-scifi-green/50">
+          <h3 class="font-bold text-scifi-green mb-2 uppercase text-xs">Tabela Trigonométrica</h3>
+          <table class="w-full text-center border-collapse">
+            <thead>
+              <tr class="bg-black/50 text-slate-300"><th class="p-2 border border-slate-700">Ângulo</th><th class="p-2 border border-slate-700">$30^\circ$</th><th class="p-2 border border-slate-700">$45^\circ$</th><th class="p-2 border border-slate-700">$60^\circ$</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="p-2 border border-slate-700 font-bold">Seno (sin)</td><td class="p-2 border border-slate-700">$\frac{1}{2}$</td><td class="p-2 border border-slate-700">$\frac{\sqrt{2}}{2}$</td><td class="p-2 border border-slate-700">$\frac{\sqrt{3}}{2}$</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ICONS = ["fa-rocket", "fa-satellite", "fa-globe", "fa-satellite-dish", "fa-meteor", "fa-sun"];
+    const LORE_SCENARIOS = [
+      { type: "Pulso de Supernova", desc: "Uma onda de calor atravessou o casco! A zona de impacto mede $[A]\\text{ m}$ e está diretamente oposta ao ângulo de $[angA]^\\circ$. Qual é o desvio de emergência (vetor $x$) que está de frente para o ângulo de $[angB]^\\circ$?" },
+      { type: "Fenda de Zero Absoluto", desc: "O sistema de aquecimento congelou! Um duto da barreira mede $[A]\\text{ m}$ e está oposto ao ângulo de $[angA]^\\circ$. Calculem o vetor de reinicialização ($x$) que bate de frente com o ângulo de $[angB]^\\circ$!" },
+      { type: "Colapso Gravitacional", desc: "A gravidade artificial falhou! O vetor de estabilidade mede $[A]\\text{ m}$ encarando um ângulo de $[angA]^\\circ$. Qual é o comprimento da rota de fuga ($x$) de frente para o ângulo de $[angB]^\\circ$?" },
+      { type: "Tempestade Magnética", desc: "Comunicações cortadas! A zona de silêncio mede $[A]\\text{ m}$ e está isolada num ângulo oposto de $[angA]^\\circ$. Qual a distância para alinhar a antena parabólica ($x$) de frente para $[angB]^\\circ$?" }
+    ];
+
+    let teams = []; let round = 1; let xpBase = 1000;
+    let matchQueue = []; 
+    let currentDuel = { teamA: null, teamB: null, turn: 1, scoreA: 0, scoreB: 0 };
+    let activeMatch = { active: null, observer: null };
+    
+    let timeSeconds = 300; let timerInterval = null; let isOvertime = false;
+    let currentProblem = null;
+
+    // --- SETUP & LOBBY ---
+    function initSetup() {
+      const container = document.getElementById("setup-squads");
+      for (let i = 0; i < 6; i++) {
+        let iconOpts = ICONS.map(ic => `<option value="${ic}" ${ICONS[i]===ic?'selected':''}>${ic.replace('fa-','')}</option>`).join('');
+        container.innerHTML += `<div class="bg-scifi-panel p-4 rounded border border-scifi-blue/30 flex flex-col gap-2"><label class="text-xs font-mono text-scifi-blue uppercase">Esquadrão ${i+1}</label><div class="flex gap-2"><select id="team-icon-${i}" class="bg-scifi-dark text-slate-300 border border-slate-600 rounded p-2 focus:outline-none"><i class="fa-solid fa-rocket"></i>${iconOpts}</select><input type="text" id="team-name-${i}" value="Esquadrão ${i+1}" class="flex-1 bg-scifi-dark text-white border border-slate-600 rounded px-3 py-2 font-bold focus:outline-none focus:border-scifi-blue"></div></div>`;
+      }
+    }
+
+    function startGame() {
+      teams = [];
+      for (let i = 0; i < 6; i++) {
+        teams.push({ id: i, name: document.getElementById(`team-name-${i}`).value.trim() || `Esq. ${i+1}`, icon: document.getElementById(`team-icon-${i}`).value, xp: 0, points: 100, hasPlayedRound: false });
+      }
+      document.getElementById("screen-setup").classList.add("hidden"); document.getElementById("round-display").classList.remove("hidden");
+      generateMatchQueue(); renderLobby();
+    }
+
+    function generateMatchQueue() {
+      let available = teams.filter(t => !t.hasPlayedRound);
+      if (available.length === 0) {
+        round++; xpBase += 1000; document.getElementById("round-display").innerText = `Rodada: ${round}`;
+        teams.forEach(t => t.hasPlayedRound = false); available = [...teams];
+        alert(`🌌 Rodada ${round}! O XP Base aumentou para ${xpBase}.`);
+      }
+      // Algoritmo Fisher-Yates Rigoroso para Randomização Perfeita
+      for (let i = available.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [available[i], available[j]] = [available[j], available[i]];
+      }
+      matchQueue = [];
+      for (let i = 0; i < available.length; i += 2) { if(available[i+1]) matchQueue.push([available[i].id, available[i+1].id]); }
+    }
+
+    function renderLobby() {
+      document.getElementById("screen-lobby").classList.remove("hidden"); document.getElementById("screen-duel").classList.add("hidden");
+      const list = document.getElementById("leaderboard-list"); list.innerHTML = "";
+      [...teams].sort((a,b) => b.xp - a.xp || b.points - a.points).forEach((t, i) => {
+        let color = i === 0 ? 'text-yellow-400' : 'text-slate-300';
+        list.innerHTML += `<div class="flex items-center justify-between bg-scifi-dark p-3 rounded border border-slate-700"><div class="flex items-center gap-3"><span class="${color} font-bold w-4">${i+1}</span><i class="fa-solid ${t.icon} ${color} text-lg w-6 text-center"></i><span class="font-bold ${color}">${t.name}</span></div><div class="text-right"><div class="text-xs text-scifi-green font-mono">${t.xp} XP</div><div class="text-[10px] text-yellow-500">${t.points} PTS</div></div></div>`;
+      });
+      document.getElementById("btn-draw").classList.remove("hidden"); document.getElementById("btn-start-duel").classList.add("hidden"); document.getElementById("duel-announcement").classList.add("hidden");
+    }
+
+    // --- DUELO & TURNOS ---
+    function drawDuel() {
+      if (matchQueue.length === 0) generateMatchQueue();
+      const match = matchQueue.shift(); 
+      
+      // Inicia Estado do Duelo Bloqueado
+      currentDuel = { teamA: teams[match[0]], teamB: teams[match[1]], turn: 1, scoreA: 0, scoreB: 0 };
+      activeMatch = { active: currentDuel.teamA, observer: currentDuel.teamB };
+
+      document.getElementById("vs-team-a").innerHTML = `<i class="fa-solid ${activeMatch.active.icon}"></i> ${activeMatch.active.name}`;
+      document.getElementById("vs-team-b").innerHTML = `<i class="fa-solid ${activeMatch.observer.icon}"></i> ${activeMatch.observer.name}`;
+      document.getElementById("duel-announcement").classList.remove("hidden"); document.getElementById("btn-draw").classList.add("hidden"); document.getElementById("btn-start-duel").classList.remove("hidden");
+    }
+
+    function startDuelPhase() {
+      document.getElementById("screen-lobby").classList.add("hidden");
+      document.getElementById("screen-duel").classList.remove("hidden"); document.getElementById("screen-duel").classList.add("flex");
+      
+      document.getElementById("active-turn-display").innerText = `Turno ${currentDuel.turn} / 2`;
+      document.getElementById("active-team-icon").className = `text-3xl text-scifi-blue fa-solid ${activeMatch.active.icon}`;
+      document.getElementById("active-team-name").innerText = activeMatch.active.name;
+      document.getElementById("active-team-pts").innerText = activeMatch.active.points;
+      document.getElementById("round-xp-base").innerText = xpBase;
+      document.getElementById("answer-input").value = "";
+
+      resetVisualizer();
+      generateProblem();
+      setupHints();
+      startTimer();
+    }
+
+    function generateProblem() {
+      const angles = [{ deg: 30, sinHtml: "\\frac{1}{2}" }, { deg: 45, sinHtml: "\\frac{\\sqrt{2}}{2}" }, { deg: 60, sinHtml: "\\frac{\\sqrt{3}}{2}" }];
+      let aIdx = Math.floor(Math.random() * 3); let bIdx; do { bIdx = Math.floor(Math.random() * 3); } while(bIdx === aIdx);
+      let angA = angles[aIdx]; let angB = angles[bIdx];
+      let sideA_val = Math.floor(Math.random() * 5 + 2) * 10; let sideA_str = `${sideA_val}`;
+      if (angA.deg === 45) { sideA_str = `${sideA_val}\\sqrt{2}`; } if (angA.deg === 60) { sideA_str = `${sideA_val}\\sqrt{3}`; }
+      
+      let coefficient = sideA_val / 0.5; let ansStr = ""; let ansFormat = "";
+      if (angB.deg === 30) { ansStr = `${coefficient * 0.5}`; ansFormat = ansStr; }
+      else if (angB.deg === 45) { ansStr = `${coefficient * 0.5}\\sqrt{2}`; ansFormat = `${coefficient * 0.5}raiz2`; }
+      else if (angB.deg === 60) { ansStr = `${coefficient * 0.5}\\sqrt{3}`; ansFormat = `${coefficient * 0.5}raiz3`; }
+
+      const scenario = LORE_SCENARIOS[Math.floor(Math.random() * LORE_SCENARIOS.length)];
+      let desc = scenario.desc.replace("[A]", sideA_str).replace("[angA]", angA.deg).replace("[angB]", angB.deg);
+      
+      currentProblem = { angA, angB, sideA_str, ansStr, ansFormat: ansFormat.toLowerCase() };
+      
+      document.getElementById("problem-text").innerHTML = `<p>${desc}</p>`;
+      document.getElementById("hint-1-content").innerHTML = `Montagem: $\\frac{${sideA_str}}{\\sin(${angA.deg}^\\circ)} = \\frac{x}{\\sin(${angB.deg}^\\circ)}$`;
+      document.getElementById("hint-2-content").innerHTML = `Substituição: $\\frac{${sideA_str}}{${angA.sinHtml}} = \\frac{x}{${angB.sinHtml}}$`;
+      document.getElementById("hint-3-content").innerHTML = `Processamento Cruzado: $${angA.sinHtml} \\cdot x = ${sideA_str} \\cdot ${angB.sinHtml}$`;
+
+      dataChips = [
+        { id: 'c1', val: sideA_str, used: false }, { id: 'c2', val: `${angA.deg}^\\circ`, used: false },
+        { id: 'c3', val: 'x', used: false }, { id: 'c4', val: `${angB.deg}^\\circ`, used: false }
+      ];
+      renderDataChips(); triggerKaTeX();
+    }
+
+    // --- HOLO-PROJETOR E CHECKLIST ---
+    const neonColors = { A: { hex: '#0096ff', border: 'border-[#0096ff]', shadow: 'shadow-neon-blue', text: 'text-[#0096ff]' }, B: { hex: '#ff8c00', border: 'border-[#ff8c00]', shadow: 'shadow-neon-orange', text: 'text-[#ff8c00]' }, C: { hex: '#39ff14', border: 'border-[#39ff14]', shadow: 'shadow-neon-green', text: 'text-[#39ff14]' } };
+    let trigState = { A: false, B: false, C: false }; let activeTrigNode = null;
+    let dataChips = []; let activeChip = null;
+    let eqSlots = { a: null, A: null, b: null, B: null, c: null, C: null };
+
+    function resetVisualizer() {
+      trigState = { A: false, B: false, C: false }; activeTrigNode = null; activeChip = null;
+      eqSlots = { a: null, A: null, b: null, B: null, c: null, C: null };
+      ['A','B','C'].forEach(p => {
+        document.getElementById(`trig-${p}`).className = "absolute w-8 h-8 rounded-full bg-scifi-dark border-2 border-slate-600 text-xs font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center " + (p==='A'?'bottom-[-15px] left-[-10px]':p==='B'?'bottom-[-15px] right-[-10px]':'top-[-15px] left-[50%] transform -translate-x-1/2');
+        document.getElementById(`trig-${p.toLowerCase()}`).className = "absolute w-6 h-6 rounded bg-scifi-dark border border-slate-600 text-[10px] font-bold text-slate-300 hover:border-white transition-all z-10 flex items-center justify-center " + (p==='A'?'top-[45%] right-[2%]':p==='B'?'top-[45%] left-[2%]':'bottom-1 left-[50%] transform -translate-x-1/2');
+        document.getElementById(`line-${p.toLowerCase()}`).setAttribute("class", "stroke-slate-600 stroke-[3px] transition-all duration-300");
+        
+        ['top','bot'].forEach(pos => {
+          let s = pos === 'top' ? p.toLowerCase() : p;
+          document.getElementById(`slot-${s}`).className = `w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render`;
+          document.getElementById(`slot-${s}`).innerHTML = s;
+        });
+        document.getElementById(`frac-${p}`).style.opacity = 1;
+        
+        let checkEl = document.getElementById(`check-${p}`);
+        checkEl.className = "flex items-center justify-between text-[10px] font-mono text-slate-500 border border-slate-700 bg-scifi-dark px-3 py-2 rounded transition-all";
+        checkEl.innerHTML = `<span><i class="fa-regular fa-square mr-1"></i> ${p==='A'?'Alfa':p==='B'?'Beta':'Gama'} (${p} ↔ ${p.toLowerCase()})</span><span class="text-yellow-500 font-bold">+10 PTS</span>`;
+      });
+    }
+
+    function clickTrig(id, type) {
+      let group = id.toUpperCase();
+      if(trigState[group]) return; 
+      if(!activeTrigNode) {
+        activeTrigNode = id; document.getElementById(`trig-${id}`).classList.add("bg-slate-700");
+      } else {
+        if(activeTrigNode.toUpperCase() === group && activeTrigNode !== id) {
+          trigState[group] = true;
+          document.getElementById(`trig-${group}`).className = `absolute w-8 h-8 rounded-full bg-scifi-dark border-2 ${neonColors[group].border} ${neonColors[group].shadow} ${neonColors[group].text} text-xs font-bold transition-all z-10 flex items-center justify-center ` + (group==='A'?'bottom-[-15px] left-[-10px]':group==='B'?'bottom-[-15px] right-[-10px]':'top-[-15px] left-[50%] transform -translate-x-1/2');
+          document.getElementById(`trig-${group.toLowerCase()}`).className = `absolute w-6 h-6 rounded bg-scifi-dark border ${neonColors[group].border} ${neonColors[group].shadow} ${neonColors[group].text} text-[10px] font-bold transition-all z-10 flex items-center justify-center ` + (group==='A'?'top-[45%] right-[2%]':group==='B'?'top-[45%] left-[2%]':'bottom-1 left-[50%] transform -translate-x-1/2');
+          document.getElementById(`line-${group.toLowerCase()}`).setAttribute("class", `stroke-[4px] transition-all duration-300`);
+          document.getElementById(`line-${group.toLowerCase()}`).style.stroke = neonColors[group].hex;
+          updateSlotAppearance(group.toLowerCase(), group); updateSlotAppearance(group, group);
+          
+          activeMatch.active.points += 10;
+          document.getElementById("active-team-pts").innerText = activeMatch.active.points;
+          let checkEl = document.getElementById(`check-${group}`);
+          checkEl.className = `flex items-center justify-between text-[10px] font-mono text-slate-200 border ${neonColors[group].border} ${neonColors[group].shadow} bg-scifi-dark px-3 py-2 rounded pop-anim`;
+          checkEl.innerHTML = `<span><i class="fa-solid fa-square-check mr-1 ${neonColors[group].text}"></i> Sincronizado</span><span class="text-scifi-green font-bold">OK</span>`;
+          
+        } else {
+          document.getElementById(`trig-${id}`).classList.add("shake-anim", "border-scifi-red");
+          setTimeout(() => document.getElementById(`trig-${id}`).classList.remove("shake-anim", "border-scifi-red"), 300);
+          document.getElementById(`trig-${activeTrigNode}`).classList.remove("bg-slate-700");
+        }
+        activeTrigNode = null;
+      }
+    }
+
+    function updateSlotAppearance(slotId, group) {
+      let el = document.getElementById(`slot-${slotId}`);
+      if(eqSlots[slotId] === null) {
+        el.className = `w-16 h-8 border-2 ${neonColors[group].border} border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark ${neonColors[group].text} math-render`;
+      }
+    }
+
+    function renderDataChips() {
+      const cont = document.getElementById("data-chips-container"); cont.innerHTML = "";
+      dataChips.forEach(chip => {
+        if(!chip.used) {
+          let isActive = activeChip === chip.id ? "bg-slate-700 border-white" : "bg-scifi-dark border-slate-500 hover:border-slate-300";
+          cont.innerHTML += `<button onclick="selectChip('${chip.id}')" class="px-3 py-1 ${isActive} border rounded text-xs math-render text-slate-200 transition-colors shadow-sm">$${chip.val}$</button>`;
+        }
+      });
+      triggerKaTeX();
+    }
+    function selectChip(id) { activeChip = id; renderDataChips(); }
+
+    function placeInEq(slotId, group) {
+      if(eqSlots[slotId] !== null) {
+        dataChips.find(c => c.id === eqSlots[slotId]).used = false;
+        eqSlots[slotId] = null;
+        let el = document.getElementById(`slot-${slotId}`);
+        el.innerHTML = slotId;
+        updateSlotAppearance(slotId, trigState[group] ? group : null);
+        if(!trigState[group]) el.className = `w-16 h-8 border-2 border-slate-600 border-dashed rounded text-xs flex items-center justify-center hover:bg-slate-800 transition-colors bg-scifi-dark text-slate-300 math-render`;
+      } else if(activeChip) {
+        eqSlots[slotId] = activeChip;
+        let chip = dataChips.find(c => c.id === activeChip); chip.used = true; activeChip = null;
+        let el = document.getElementById(`slot-${slotId}`);
+        el.innerHTML = `$${chip.val}$`;
+        let colorClass = trigState[group] ? `${neonColors[group].border} ${neonColors[group].shadow} ${neonColors[group].text}` : `border-slate-400 text-white`;
+        el.className = `w-16 h-8 border border-solid rounded text-[10px] flex items-center justify-center bg-scifi-dark math-render transition-all ${colorClass}`;
+      }
+      checkFading(); renderDataChips(); triggerKaTeX();
+    }
+
+    function checkFading() {
+      let activeA = (eqSlots.a || eqSlots.A) ? 1 : 0; let activeB = (eqSlots.b || eqSlots.B) ? 1 : 0; let activeC = (eqSlots.c || eqSlots.C) ? 1 : 0;
+      let totalFracs = activeA + activeB + activeC;
+      document.getElementById('frac-A').style.opacity = (totalFracs >= 2 && !activeA) ? 0.2 : 1;
+      document.getElementById('frac-B').style.opacity = (totalFracs >= 2 && !activeB) ? 0.2 : 1;
+      document.getElementById('frac-C').style.opacity = (totalFracs >= 2 && !activeC) ? 0.2 : 1;
+    }
+
+    // --- TIMER SYSTEM ---
+    function startTimer() {
+      clearInterval(timerInterval); timeSeconds = 300; isOvertime = false;
+      const bar = document.getElementById("timer-bar"); const text = document.getElementById("timer-text"); const container = document.getElementById("timer-container");
+      container.classList.remove("critical-flash"); bar.classList.remove("hidden");
+      
+      timerInterval = setInterval(() => {
+        if (!isOvertime) {
+          timeSeconds--;
+          text.innerText = `${Math.floor(timeSeconds/60).toString().padStart(2, '0')}:${(timeSeconds%60).toString().padStart(2, '0')}`;
+          bar.style.width = `${(timeSeconds/300)*100}%`;
+          if (timeSeconds <= 0) {
+            isOvertime = true; timeSeconds = 0; bar.classList.add("hidden"); container.classList.add("critical-flash");
+            document.getElementById("hints-locked-msg").classList.add("hidden");
+            document.getElementById("hints-container").classList.remove("hidden"); document.getElementById("hints-container").classList.add("flex");
+          }
+        } else {
+          timeSeconds++;
+          text.innerText = `+${Math.floor(timeSeconds/60).toString().padStart(2, '0')}:${(timeSeconds%60).toString().padStart(2, '0')}`;
+          if (timeSeconds % 5 === 0 && activeMatch.active.points > 0) {
+            activeMatch.active.points = Math.max(0, activeMatch.active.points - 2);
+            document.getElementById("active-team-pts").innerText = activeMatch.active.points;
+          }
+        }
+      }, 1000);
+    }
+
+    // --- HINTS & VALIDATION ---
+    function setupHints() {
+      document.getElementById("hints-locked-msg").classList.remove("hidden"); document.getElementById("hints-container").classList.add("hidden"); document.getElementById("hints-container").classList.remove("flex");
+      for(let i=1; i<=3; i++) { document.getElementById(`hint-${i}-content`).classList.add("hidden"); document.getElementById(`btn-hint-${i}`).disabled = false; }
+      document.getElementById("btn-hint-1").className = "w-full text-left bg-slate-800 border border-slate-600 p-2 rounded text-xs transition font-mono hover:bg-slate-700";
+      document.getElementById("btn-hint-2").className = "w-full text-left bg-slate-800 border border-slate-600 p-2 rounded text-xs transition font-mono opacity-50 pointer-events-none hover:bg-slate-700";
+      document.getElementById("btn-hint-3").className = "w-full text-left bg-slate-800 border border-slate-600 p-2 rounded text-xs transition font-mono opacity-50 pointer-events-none hover:bg-slate-700";
+    }
+
+    function buyHint(level) {
+      if(activeMatch.active.points < 10) { alert("Pontos Insuficientes!"); return; }
+      activeMatch.active.points -= 10; document.getElementById("active-team-pts").innerText = activeMatch.active.points;
+      document.getElementById(`hint-${level}-content`).classList.remove("hidden"); document.getElementById(`btn-hint-${level}`).disabled = true; document.getElementById(`btn-hint-${level}`).classList.add("bg-scifi-panel", "border-scifi-blue", "text-scifi-blue");
+      if(level < 3) document.getElementById(`btn-hint-${level+1}`).classList.remove("opacity-50", "pointer-events-none");
+    }
+
+    // --- MANIPULAÇÃO DE TURNOS E PLACAR ---
+    function surrenderTurn() {
+      if(confirm("ALERTA CRÍTICO: Tem certeza que deseja abortar a missão? O Esquadrão ganhará 0 XP neste turno.")) {
+        clearInterval(timerInterval);
+        handleTurnEnd(0, true);
+      }
+    }
+
+    function submitAnswer() {
+      let val = document.getElementById("answer-input").value.trim().toLowerCase().replace(/\s+/g, '').replace(/raizde/g, 'raiz').replace(/sqrt/g, 'raiz');
+      if (val === currentProblem.ansFormat) {
+        clearInterval(timerInterval);
+        let earnedXp = xpBase; if (!isOvertime) earnedXp += (timeSeconds * 10);
+        handleTurnEnd(earnedXp, false);
+      } else {
+        document.getElementById("screen-duel").classList.add("bg-red-900/40");
+        setTimeout(() => document.getElementById("screen-duel").classList.remove("bg-red-900/40"), 300);
+      }
+    }
+
+    function handleTurnEnd(earnedXp, surrendered) {
+      if(!surrendered) {
+        alert(`🚀 ACESSO CONCEDIDO!\nVetor correto: ${currentProblem.ansStr}\nRecompensa: +${earnedXp} XP`);
+      } else {
+        alert(`💥 MISSÃO ABORTADA!\nO Esquadrão desistiu do reparo.`);
+      }
+
+      // Adiciona XP global e salva o score do Duelo
+      activeMatch.active.xp += earnedXp;
+      if (currentDuel.turn === 1) { currentDuel.scoreA = earnedXp; } 
+      else { currentDuel.scoreB = earnedXp; }
+
+      if (currentDuel.turn === 1) {
+        // INVERSÃO: Vai para o Turno 2
+        currentDuel.turn = 2;
+        activeMatch = { active: currentDuel.teamB, observer: currentDuel.teamA };
+        alert(`🔄 INVERSÃO DE PAPÉIS!\nAgora o ${activeMatch.active.name} assumirá o Terminal de Comando!`);
+        startDuelPhase(); // Recarrega a tela para a Equipe B
+      } else {
+        // FIM DO DUELO
+        currentDuel.teamA.hasPlayedRound = true;
+        currentDuel.teamB.hasPlayedRound = true;
+        showDuelResult();
+      }
+    }
+
+    function showDuelResult() {
+      document.getElementById("modal-duel-result").classList.remove("hidden");
+      document.getElementById("modal-duel-result").classList.add("flex");
+
+      const tA = currentDuel.teamA; const tB = currentDuel.teamB;
+      const sA = currentDuel.scoreA; const sB = currentDuel.scoreB;
+      
+      document.getElementById("dr-icon-a").className = `fa-solid ${tA.icon} text-4xl mb-2 text-slate-300`;
+      document.getElementById("dr-name-a").innerText = tA.name;
+      document.getElementById("dr-xp-a").innerText = `${sA} XP`;
+      document.getElementById("dr-pts-a").innerText = `${tA.points} PTS`;
+
+      document.getElementById("dr-icon-b").className = `fa-solid ${tB.icon} text-4xl mb-2 text-slate-300`;
+      document.getElementById("dr-name-b").innerText = tB.name;
+      document.getElementById("dr-xp-b").innerText = `${sB} XP`;
+      document.getElementById("dr-pts-b").innerText = `${tB.points} PTS`;
+
+      let titleEl = document.getElementById("duel-result-message");
+      if (sA > sB) {
+        titleEl.innerHTML = `<span class="text-scifi-blue">Vitória de ${tA.name}!</span>`;
+        document.getElementById("dr-icon-a").classList.add("text-scifi-blue", "drop-shadow-[0_0_10px_rgba(0,150,255,0.8)]");
+      } else if (sB > sA) {
+        titleEl.innerHTML = `<span class="text-scifi-green">Vitória de ${tB.name}!</span>`;
+        document.getElementById("dr-icon-b").classList.add("text-scifi-green", "drop-shadow-[0_0_10px_rgba(57,255,20,0.8)]");
+      } else {
+        // Desempate por Pontos de Suporte (PTS)
+        if (tA.points > tB.points) {
+          titleEl.innerHTML = `<span class="text-scifi-blue">Vitória de ${tA.name} (Vantagem PTS)!</span>`;
+        } else if (tB.points > tA.points) {
+          titleEl.innerHTML = `<span class="text-scifi-green">Vitória de ${tB.name} (Vantagem PTS)!</span>`;
+        } else {
+          titleEl.innerHTML = `<span class="text-yellow-400">Empate Absoluto!</span>`;
+        }
+      }
+    }
+
+    function closeDuelResult() {
+      document.getElementById("modal-duel-result").classList.add("hidden");
+      document.getElementById("modal-duel-result").classList.remove("flex");
+      renderLobby();
+    }
+
+    // --- MANUAL E UTILITÁRIOS ---
+    function openManual() { document.getElementById("modal-manual").classList.remove("hidden"); document.getElementById("modal-manual").classList.add("flex"); triggerKaTeX(); }
+    function closeManual() { document.getElementById("modal-manual").classList.add("hidden"); document.getElementById("modal-manual").classList.remove("flex"); }
+    function resetGame() { if(confirm("ALERTA: Isso apagará todos os dados e pontuações atuais. Continuar?")) location.reload(); }
+    function triggerKaTeX() { renderMathInElement(document.body, { delimiters: [{left:"$$",right:"$$",display:true}, {left:"$",right:"$",display:false}, {left:"\\(",right:"\\)",display:false}, {left:"\\[",right:"\\]",display:true}], throwOnError:false }); }
+
+    window.onload = () => { initSetup(); triggerKaTeX(); };
+  </script>
+</body>
+</html>
